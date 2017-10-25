@@ -1,0 +1,257 @@
+\documentclass{article}
+
+\begin{document}
+
+
+<<libraries>>=
+library(devtools)
+install_github("jbracher/hhh4addon", build_vignettes = TRUE)
+
+rm(list=ls())
+
+library(surveillance)
+library(hhh4contacts)
+library(hhh4addon)
+@
+
+Johannes' exemple with salmonella (hhh4addon)
+<<Johannes>>=
+
+data("salmonella.agona")
+salmonella <- disProg2sts(salmonella.agona)
+control_salmonella.sub <- list(end = list(f = addSeason2formula(~ 1), lag = 1),ar = list(f = addSeason2formula(~ 1), lag = 1), family = "NegBinM", subset = 6:260)
+fit_salmonella.sub <- hhh4(salmonella, control_salmonella.sub)
+
+# Predictive moments
+pred_mom$mu_matrix <- predictive_moments(fit_salmonella.sub, t_condition = 260, lgt = 52, return_Sigma = TRUE)
+plot(fit_salmonella.sub)
+fanplot_prediction(pred_mom, add = TRUE)
+fanplot_prediction(pred_mom, add = FALSE)
+?predictive_moments
+# Dawid-Sebastiani score, a proper scoring rule negatively orientated
+ds_score_hhh4(pred_mom)
+
+# Additional info
+plot(pred_mom$mu_vector) # the predictive means
+plot(pred_mom$var_matrix) # the predictive variances
+str(pred_mom$Sigma)
+diag(pred_mom$Sigma)
+@
+
+Let's see if we can replicate talbe 1 of held (2005) for negative binomial models (5-8). The model fitted above should be model 8. I will also modify the model accordingly to obtain modle 5-6-7. I think Held (2005) used the complete dataset to fit his model and no lag.
+
+<<myownsalmonella_m5>>=
+nrow(salmonella)
+
+# Model 8: S:Yes AR:YES
+my_salmonella8<- list(
+  end = list(f = addSeason2formula(~ 1),  S=1), 
+  ar = list(f =~ 1),
+  family = "NegBinM")
+fit_salmonella8 <- hhh4(salmonella, my_salmonella8)
+
+summary(fit_salmonella8)
+coef(fit_salmonella8, se=TRUE, amplitudeShift = TRUE, idx2Exp = TRUE)
+plot(fit_salmonella8)
+
+# parametrisation problem?
+1/coef(fit_salmonella8, se=TRUE, amplitudeShift = TRUE, idx2Exp = TRUE)
+# still not right...
+
+#confint(fit_salmonella8)
+#confint(fit_salmonella8,  parm="overdisp")
+
+# Why don't I get the same as paper?
+# What does seasonality mean?
+# Seasonality shifted?
+
+# Model 7: S:Yes AR:NO
+my_salmonella7<- list(
+  end = list(f = addSeason2formula(~ 1),  S=1), 
+  ar = list(f = addSeason2formula(~ -1), S=0),
+  family = "NegBinM")
+fit_salmonella7 <- hhh4(salmonella, my_salmonella7)
+summary(fit_salmonella7)
+coef(fit_salmonella7, se=TRUE, amplitudeShift = TRUE, idx2Exp = TRUE)
+plot(fit_salmonella7)
+# Still some AR components?
+
+my_salmonella7b<- list(
+  end = list(f = addSeason2formula(~ 1),  S=1), 
+  ar = list(f = ~-1),
+  family = "NegBinM")
+fit_salmonella7b <- hhh4(salmonella, my_salmonella7b)
+summary(fit_salmonella7b)
+coef(fit_salmonella7b, se=TRUE, amplitudeShift = TRUE, idx2Exp = TRUE)
+plot(fit_salmonella7b)
+
+my_salmonella7c<- list(
+  end = list(f = addSeason2formula(~ 1),  S=1), 
+  ar = list(f = ~1),
+  family = "NegBinM")
+fit_salmonella7c <- hhh4(salmonella, my_salmonella7c)
+summary(fit_salmonella7c)
+coef(fit_salmonella7c, se=TRUE, amplitudeShift = TRUE, idx2Exp = TRUE)
+plot(fit_salmonella7c)
+
+# why do I still have a seasonal component with S=0? when we say no AR it means -1 or 1? (with or without intercept?) where is the lag? t-1? do I have to ~1-t?
+
+# Model 6: S:NO AR:YES
+my_salmonella6<- list(
+  end = list(f = addSeason2formula(~ 1),  S=0),
+  ar = list(f = addSeason2formula(~ 1), S=0),
+  family = "NegBinM")
+fit_salmonella6 <- hhh4(salmonella, my_salmonella7)
+summary(fit_salmonella6)
+coef(fit_salmonella6, se=TRUE, amplitudeShift = TRUE, idx2Exp = TRUE)
+plot(fit_salmonella6)
+# Same as previous model?
+
+# Model 6: S:NO AR:YES
+my_salmonella6b<- list(
+  end = list(f = addSeason2formula(~ -1),  S=0),
+  ar = list(f = addSeason2formula(~ 1), S=0),
+  family = "NegBinM")
+fit_salmonella6b <- hhh4(salmonella, my_salmonella7)
+summary(fit_salmonella6b)
+coef(fit_salmonella6b, se=TRUE, amplitudeShift = TRUE, idx2Exp = TRUE)
+plot(fit_salmonella6b)
+# why is it not working?
+# can you use end= ~-1?
+
+
+# Model 5: S:NO AR:NO
+my_salmonella5<- list(
+  end = list(f = addSeason2formula(~ -1),  S=0),
+  ar = list(f = addSeason2formula(~ -1), S=0),
+  family = "NegBinM")
+fit_salmonella5 <- hhh4(salmonella, my_salmonella5)
+summary(fit_salmonella5)
+coef(fit_salmonella5, se=TRUE, amplitudeShift = TRUE, idx2Exp = TRUE)
+plot(fit_salmonella5)
+# why is it not working?
+
+AIC(fit_salmonella8, fit_salmonella7, fit_salmonella6, fit_salmonella6b, fit_salmonella5)
+@
+
+
+
+We start working with the norovirus. The aim is to create 3 models each with a different lag (1,2 & 3). We then want to create a fourth model based on the model average of the three.
+
+We will use a subset of the data to train our models (first 3 years) and then compare performances on a test data (last year)
+
+<<load.data>>=
+?noroBE
+noro<- noroBE(by = "none")
+dim(noro)# this is a univariate time series
+plot(noro)
+plot(noro, type=observed~time|unit) # same
+@
+
+<<noro.model1>>=
+# ar: autoregressive
+# ne: influence of other units: only used in multivariate right?
+# end: endemic
+
+# Warning:'control$subset' should be > 2 due to epidemic lags
+# subset: Typically 2:nrow(obs) if model contains autoregression
+# here I should start at 4 since we go up to lag 3 right? I take 5 too be sure.
+nrow(noro)
+208/52 # we only have 4 years? where is the test data?
+train<-5:(nrow(noro)-52)
+test<-(nrow(noro)-51):nrow(noro)
+
+# Issues: I was asked to model the "simplest model: no seasonality, no AR... Is lag relevant with no AR?
+# Lag should only show up in the epdemic component no?
+# Seasonality should only be relevant in the endemic componant no?
+
+
+
+# Model 1: Simplest model: Seasonality:NO AR:NO
+
+# LAG 1
+
+n1_lag1 <- list(
+  end = list(f = addSeason2formula(f= ~ 1, S=0), lag = 1), 
+  ar = list(f = addSeason2formula(~ -1), lag = 1),
+  family = "NegBinM",
+  subset= train)
+fit_n1_lag1 <- hhh4(noro, n1_lag1)
+fit_n1_lag1b <- fit_par_lag(noro, n1_lag1) # doesn't work..
+
+
+summary(fit_n1_lag1)
+
+p1_lag1 <- predictive_moments(fit_n1_lag1$best_mod, t_condition = (nrow(noro)-52), lgt = 52, return_Sigma = TRUE)
+
+
+# LAG 2
+
+n1_lag2 <- list(
+  end = list(f = addSeason2formula(f= ~ 1, S=0), lag = 2), 
+  ar = list(f = addSeason2formula(~ -1), lag = 2),
+  family = "NegBinM",
+  subset= train)
+fit_n1_lag2 <- hhh4(noro, n1_lag2)
+summary(fit_n1_lag2)
+
+p1_lag2 <- predictive_moments(fit_n1_lag2, t_condition = (nrow(noro)-52), lgt = 52, return_Sigma = TRUE)
+
+#error...
+
+# LAG 3
+
+n1_lag3 <- list(
+  end = list(f = addSeason2formula(f= ~ 1, S=0), lag =3), 
+  ar = list(f = addSeason2formula(~ -1), lag = 3),
+  family = "NegBinM",
+  subset= train)
+fit_n1_lag3 <- hhh4(noro, n1_lag3)
+summary(fit_n1_lag3)
+
+p1_lag3 <- predictive_moments(fit_n1_lag3, t_condition = (nrow(noro)-52), lgt = 52, return_Sigma = TRUE)
+#error...
+
+
+AIC(fit_n1_lag1,fit_n1_lag2,fit_n1_lag3)
+
+# lag in the endemic part matters?
+
+
+@
+
+
+<<MA1>>=
+# Create model Average
+
+# We create the model average according to formula in other document:
+
+# We need to define weights according to the relative likelihood: exp(-0.5*AIC).
+
+like<-exp(-0.5*AIC(fit_n1_lag1,fit_n1_lag2,fit_n1_lag3)[,2])
+w<-like/sum(like)
+sum(w)# check it sums up to 1.
+
+
+# Calculate the mean of average model:
+
+# we use predictive means right?
+av.mean<-w[1] * p1_lag1$mu_vector + w[2] * p1_lag2 + w[3] * p1_lag3 # the predictive means
+plot(av.mean) # the predictive variances
+str(pred_mom$Sigma))
+
+
+# Calculate the variance of average model: ?!?!?
+
+av.var<- w[1]*p1_lag1$Sigma + w[1]*(p1_lag1$mu_vectorav.mean)^2
++ w[2]*p1_lag2$Sigma + w[2]*(p1_lag2$mu_vectorav.mean)^2 
++ w[3]*p1_lag3$Sigma + w[3]*(p1_lag3$mu_vectorav.mean)^2 
+
+# sigma is a matrix?!?
+dim(pred_mom$Sigma)
+
+@
+
+
+
+\end{document}

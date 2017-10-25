@@ -1,0 +1,69 @@
+---
+title: "Theory"
+author: "Laura Barras"
+date: "21 octobre 2017"
+header-includes:
+  - \usepackage{fixmath}
+output: pdf_document
+---
+
+
+
+## THE THEORY - univariate models
+
+Count data is traditionnaly modeled with a poisson distribution however we will directly use a Negative binomial model to account for potential overdispersion: $$Y_t \sim \text{NBin}(\mu_t, \psi)$$:
+with mean
+$$\mu_t= \nu_t + \lambda y_{t-1}$$
+and variance: $$\text{Var}(Y_t) = \mu_t(1+\psi \mu_t)$$
+
+Note that we did not use an log link here but the identity link to let the counts act directly on the conditional mean $\mu_t \text{ of }y_t|y_{t-1}$.
+
+The mean incidence is decomposed additively into two components: an epidemic or autoregressive component ($\lambda_{yt}$) which can also be interpretated as the basic reporduction number $R_0$ and an endemic component ($\nu_t$).
+
+A parametric model suggested by Held et al. (2005) includes seasonality in the endemic component to explain seasonal pattern as follows:
+$$ \log(\nu_t)= \alpha + \beta t + \bigg\{ \sum_{s=1}^{S} \gamma_s \sin(w_st) + \delta_s \cos(w_st) \bigg\}  $$
+where $\alpha$ is an intercept, $\beta$ is a trend parameter and the terms in the curly brackets are used to model seasonal variation. Here, $\gamma_s$ and $\delta_s$ are unknown parameters, S denotes the number of harmonics to include and $w_s = 2\pi s/ freq$. Here freq= 52 for weekly data. Seasonal terms can also be written as:
+$$ \gamma_s \sin(w_st) + \delta_s \cos(w_st) = A_s \sin(w_st +\psi_s)$$  with amplitude $A_s = \sqrt{\gamma_s^2 +\delta_s^2}$ and the phase difference $\tan(\psi)= \delta_s / \gamma_s$
+
+
+
+## THE THEORY - multivariate models
+
+The univariate time series can be extended to a multivariate model by including an additional neighbor-driven component where past cases in other units also enter as explanatory covariates. The conditional mean $\mu_{it}$ is then given by
+$$ \mu_t= e_{it}\nu_t + \lambda_{it} y_{i,t-1} +\phi \sum_ {j\neq i} w_{ji}y_{j,t-1}$$
+where the unknown parameter $\phi$ quantifies the influence of other units $j$ on unit $i$, $w_{ij}$ are weights and $e_{it}$ correspond to an offset (such as population fractions at time $t$ in region $i$)
+The three unknown quantities $\lambda, \psi \text{ and } \nu$ are modelled as log-linear predictors:
+$$ log(\lambda_{it})= \alpha_0 + a_i +\mathbold{u_{it}^\intercal\alpha}$$
+$$ log(\phi_{it})= \beta_0 + b_i +\mathbold{x_{it}^\intercal\beta}$$
+$$ log(\nu_{it})= \gamma_0 + c_i +\mathbold{z_{it}^\intercal\gamma}$$
+
+where $\alpha_0$, $\beta_0$ and $\gamma_0$ are intercepts and $\mathbold{\alpha}$, $\mathbold{\beta}$ and $\mathbold{\gamma}$ are vectors of unknown parameters corresponding to covariates vectors $\mathbf{u}_it$, $\mathbf{x}_it$, $\mathbf{z}_it$, and $a_i$, $b_i$ and $c_i$ are random effects measured by penalized quasi-likelihood.
+
+For exemple a model with seasonality in the endemic compenent can be written as:
+$$ z_{it} = (t, \sin(2\pi/freq~t), cos(2\pi/freq~t))^\intercal$$
+
+or: hhh4addon: here it us not the log predictor...?
+
+$$ \lambda_{it}= \alpha_i^{(\lambda)} + \beta_i^{(\lambda)} +\sin(2\pi t /w)+ \gamma_i^{(\lambda)} \cos (2\pi t /w)$$
+$$ \nu_{it}= \alpha_i^{(\nu)} + \beta_i^{(\nu)} +\sin(2\pi t /w)+ \gamma_i^{(\nu)} \cos (2\pi t /w)$$$$ \nu_{it}= \gamma_0 + c_i +\mathbold{z_{it}^\intercal\gamma}$$
+$$ \phi{it}= \alpha_i^{(\phi)} + \beta_i^{(\phi)} +\sin(2\pi t /w)+ \gamma_i^{(\phi)} \cos (2\pi t /w)$$
+
+
+## THE THEORY - (Bayesian?) Model Averaging
+
+A technique to get better predictions is to average across different models to get better estimates. The mean is then:
+
+$$E(Y)= \sum_{j=1}^{J} w_{j}E(Y|M_j)$$
+$$ \text{E}(u|y)= \sum_{j=1}^{k}P(Mj|y)\text{E}(\mu|M_j,y)$$
+the posterior mean is a weighted average of the posterior means in the separate models.
+Here $w_ij$ can be defined according to the AIC of the models.
+
+The covariance is 
+$$ \text{Var}(\mu|y) = \sum_{k=1}^{K}P(M_j|y)[\text{Var}(\mu|M_j,y)+\{\text{E}(\mu|M_j,y)- \text{E}(u|y)\}^2]$$ 
+ which in our case translates to
+$$ Cov(Y) (or Var(Y)?)= \sum_{j=1}^{k}\{w_{ij}\sigma_j^2 + w_{ij}(\text{E}(Y|M_j)- \text{E}(Y)^2)\} $$
+
+where $\sigma_j~2$ is the standard deviation for a variable drawn from model $M_j$. 
+
+
+## THE THEORY - Staking
